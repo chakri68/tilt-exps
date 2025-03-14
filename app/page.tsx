@@ -1,5 +1,4 @@
 import Image from "next/image";
-import TiltShineImage from "./components/TiltShineImage";
 import HologramEffect from "./components/TiltShineImage";
 
 export default function Home() {
