@@ -1,77 +1,155 @@
-"use client";
+import React, {
+  useState,
+  useEffect,
+  MouseEventHandler,
+  MouseEvent,
+} from "react";
 
-import React, { useEffect, useRef } from "react";
+const HologramEffect = () => {
+  const [orientation, setOrientation] = useState({
+    alpha: 0,
+    beta: 0,
+    gamma: 0,
+  });
 
-export type TiltShineImageProps = {
-  imageUrl?: string;
-};
-
-const TiltShineImage = ({ imageUrl }: TiltShineImageProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Update shine effect based on orientation values
-  const updateShine = (x: number, y: number) => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-    const shine = container.querySelector(".shine") as HTMLElement;
-
-    // Update the gradient position
-    shine.style.background = `linear-gradient(${135 + (x - 0.5) * 90}deg, 
-                              rgba(255,255,255,0.7) 0%, 
-                              rgba(255,255,255,0) 60%)`;
-
-    // Add a slight transform effect for more dimensionality
-    container.style.transform = `perspective(1000px) rotateX(${
-      (y - 0.5) * -10
-    }deg) rotateY(${(x - 0.5) * 10}deg)`;
-  };
-
-  // Handle orientation changes
-  const handleOrientation = (event: DeviceOrientationEvent) => {
-    // Get the orientation values
-    const beta = event.beta; // X-axis (-180 to 180)
-    const gamma = event.gamma; // Y-axis (-90 to 90)
-
-    if (beta === null || gamma === null) return;
-
-    // Normalize values to use for the shine effect
-    const normalizedX = Math.min(Math.max((gamma + 90) / 180, 0), 1);
-    const normalizedY = Math.min(Math.max((beta + 180) / 360, 0), 1);
-
-    // Update the shine effect position
-    updateShine(normalizedX, normalizedY);
-  };
-
-  // Set up event listeners
   useEffect(() => {
-    // Default to center position
-    updateShine(0.5, 0.5);
+    // Check if DeviceOrientationEvent is supported
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener("deviceorientation", handleOrientation);
+    }
 
-    window.addEventListener("deviceorientation", handleOrientation);
-
-    // Cleanup function
+    // Cleanup
     return () => {
       window.removeEventListener("deviceorientation", handleOrientation);
     };
   }, []);
 
+  const handleOrientation = (event: DeviceOrientationEvent) => {
+    setOrientation({
+      alpha: event.alpha || 0, // Z-axis rotation [0, 360)
+      beta: event.beta || 0, // X-axis rotation [-180, 180)
+      gamma: event.gamma || 0, // Y-axis rotation [-90, 90)
+    });
+  };
+
+  // Calculate color based on device orientation
+  const getHologramColor = () => {
+    // Normalize values to use for color generation
+    const normalizedAlpha = orientation.alpha / 360;
+    const normalizedBeta = (orientation.beta + 180) / 360;
+    const normalizedGamma = (orientation.gamma + 90) / 180;
+
+    // Create RGB values with holographic effect
+    const r = Math.floor(150 + 100 * normalizedGamma);
+    const g = Math.floor(150 + 100 * normalizedBeta);
+    const b = Math.floor(220 + 35 * normalizedAlpha);
+
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  // Generate hologram grid lines
+  const generateHologramLines = () => {
+    const lines = [];
+    const lineCount = 20;
+
+    for (let i = 0; i < lineCount; i++) {
+      const opacity = 0.2 + (0.8 * (i % 3)) / 3;
+      lines.push(
+        <div
+          key={`h-line-${i}`}
+          className="absolute w-full h-px"
+          style={{
+            top: `${(i * 100) / lineCount}%`,
+            backgroundColor: "rgba(255, 255, 255, 0.7)",
+            opacity: opacity,
+            boxShadow: "0px 0px 4px rgba(120, 220, 255, 0.8)",
+          }}
+        />
+      );
+
+      lines.push(
+        <div
+          key={`v-line-${i}`}
+          className="absolute h-full w-px"
+          style={{
+            left: `${(i * 100) / lineCount}%`,
+            backgroundColor: "rgba(255, 255, 255, 0.7)",
+            opacity: opacity,
+            boxShadow: "0px 0px 4px rgba(120, 220, 255, 0.8)",
+          }}
+        />
+      );
+    }
+
+    return lines;
+  };
+
+  // Mouse/touch fallback for desktop testing
+  const handleMouseMove: MouseEventHandler<HTMLDivElement> = (e) => {
+    const x = (e.clientX / window.innerWidth) * 180 - 90;
+    const y = (e.clientY / window.innerHeight) * 180 - 90;
+
+    setOrientation({
+      alpha: x + y,
+      beta: y,
+      gamma: x,
+    });
+  };
+
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center justify-center w-full p-4">
       <div
-        ref={containerRef}
-        className="relative w-64 h-64 overflow-hidden rounded-lg shadow-lg transition-transform duration-100 ease-out"
+        className="relative w-64 h-64 rounded-md overflow-hidden shadow-lg"
+        style={{
+          background: getHologramColor(),
+          transition: "background-color 0.1s ease",
+          boxShadow: `0 0 20px ${getHologramColor()}`,
+        }}
+        onMouseMove={handleMouseMove}
+        onTouchMove={(e) => {
+          const touch = e.touches[0];
+          handleMouseMove({
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+          } as MouseEvent<HTMLDivElement>);
+        }}
       >
-        <div className="w-full h-full">
-          <img
-            src={imageUrl || "/api/placeholder/400/400"}
-            alt="Tilt responsive image"
-            className="w-full h-full object-cover"
-          />
+        {/* Hologram grid effect */}
+        {generateHologramLines()}
+
+        {/* Main content */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-white text-xl font-bold tracking-wider opacity-90 select-none transform">
+            HOLOGRAM
+          </div>
         </div>
-        <div className="shine absolute inset-0 pointer-events-none"></div>
+
+        {/* Glare effect */}
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: `linear-gradient(
+              ${135 + orientation.gamma}deg, 
+              rgba(255, 255, 255, 0.5) 0%, 
+              rgba(255, 255, 255, 0) 50%
+            )`,
+          }}
+        />
+      </div>
+
+      {/* Permission container for iOS */}
+      <div id="permission-container" className="mt-2"></div>
+
+      {/* Display orientation values */}
+      <div className="mt-4 text-center">
+        <div className="text-sm text-gray-700">
+          <p>Alpha: {orientation.alpha.toFixed(1)}°</p>
+          <p>Beta: {orientation.beta.toFixed(1)}°</p>
+          <p>Gamma: {orientation.gamma.toFixed(1)}°</p>
+        </div>
       </div>
     </div>
   );
 };
 
-export default TiltShineImage;
+export default HologramEffect;

@@ -1,11 +1,12 @@
 import Image from "next/image";
 import TiltShineImage from "./components/TiltShineImage";
+import HologramEffect from "./components/TiltShineImage";
 
 export default function Home() {
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <TiltShineImage imageUrl={`https://picsum.photos/200/300`} />
+        <HologramEffect />
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
         <a
