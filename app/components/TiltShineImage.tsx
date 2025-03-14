@@ -217,7 +217,7 @@ const HologramEffect = () => {
           style={getGlitchEffect()}
         >
           <div className="text-white text-xl font-bold tracking-wider opacity-90 select-none transform">
-            HOLOGRAM
+            MEGIKK
           </div>
         </div>
 
