@@ -1,11 +1,6 @@
 "use client";
 
-import React, {
-  useState,
-  useEffect,
-  MouseEventHandler,
-  MouseEvent,
-} from "react";
+import React, { useState, useEffect } from "react";
 
 const HologramEffect = () => {
   const [orientation, setOrientation] = useState({
@@ -13,18 +8,86 @@ const HologramEffect = () => {
     beta: 0,
     gamma: 0,
   });
+  const [isSupported, setIsSupported] = useState(true);
+  const [flickerStates, setFlickerStates] = useState<
+    { opacity: number; intensity: number }[]
+  >([]);
+  const [flickerTimestamp, setFlickerTimestamp] = useState(0);
 
   useEffect(() => {
+    // Initialize flicker states for lines
+    const lineCount = 20;
+    const initialFlickerStates = Array(lineCount * 2)
+      .fill(0)
+      .map(() => ({
+        opacity: Math.random() * 0.5 + 0.3,
+        intensity: Math.random(),
+      }));
+    setFlickerStates(initialFlickerStates);
+
     // Check if DeviceOrientationEvent is supported
     if (window.DeviceOrientationEvent) {
-      window.addEventListener("deviceorientation", handleOrientation);
+      // Request permission for iOS 13+ devices
+      // @ts-expect-error - requestPermission is not yet in the TS types
+      if (typeof DeviceOrientationEvent.requestPermission === "function") {
+        // Create a button for iOS permission
+        const button = document.createElement("button");
+        button.innerText = "Enable Motion Sensors";
+        button.className =
+          "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4";
+        button.onclick = async () => {
+          try {
+            // @ts-expect-error - requestPermission is not yet in the TS types
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === "granted") {
+              window.addEventListener("deviceorientation", handleOrientation);
+              button.remove();
+            }
+          } catch (error) {
+            console.error(
+              "Error requesting device orientation permission:",
+              error
+            );
+          }
+        };
+        document.getElementById("permission-container")?.appendChild(button);
+      } else {
+        // For non-iOS devices, just add the event listener
+        window.addEventListener("deviceorientation", handleOrientation);
+      }
+    } else {
+      setIsSupported(false);
     }
+
+    // Set up flickering animation
+    const flickerInterval = setInterval(() => {
+      setFlickerTimestamp(Date.now());
+    }, 50); // Update flicker effect every 50ms
 
     // Cleanup
     return () => {
       window.removeEventListener("deviceorientation", handleOrientation);
+      clearInterval(flickerInterval);
     };
   }, []);
+
+  // Update flicker states when timestamp changes
+  useEffect(() => {
+    if (flickerTimestamp === 0) return;
+
+    setFlickerStates((prevStates) =>
+      prevStates.map((state) => {
+        // Randomly decide if this line should change its flicker state
+        if (Math.random() < 0.2) {
+          return {
+            opacity: Math.random() * 0.5 + 0.3,
+            intensity: Math.random(),
+          };
+        }
+        return state;
+      })
+    );
+  }, [flickerTimestamp]);
 
   const handleOrientation = (event: DeviceOrientationEvent) => {
     setOrientation({
@@ -49,13 +112,23 @@ const HologramEffect = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Generate hologram grid lines
+  // Generate hologram grid lines with flickering effect
   const generateHologramLines = () => {
     const lines = [];
     const lineCount = 20;
 
     for (let i = 0; i < lineCount; i++) {
-      const opacity = 0.2 + (0.8 * (i % 3)) / 3;
+      // Get flicker state for this line
+      const hFlickerState = flickerStates[i] || {
+        opacity: 0.5,
+        intensity: 0.5,
+      };
+      const vFlickerState = flickerStates[i + lineCount] || {
+        opacity: 0.5,
+        intensity: 0.5,
+      };
+
+      // Horizontal line with flicker
       lines.push(
         <div
           key={`h-line-${i}`}
@@ -63,12 +136,16 @@ const HologramEffect = () => {
           style={{
             top: `${(i * 100) / lineCount}%`,
             backgroundColor: "rgba(255, 255, 255, 0.7)",
-            opacity: opacity,
-            boxShadow: "0px 0px 4px rgba(120, 220, 255, 0.8)",
+            opacity: hFlickerState.opacity,
+            boxShadow: `0px 0px ${
+              4 + hFlickerState.intensity * 3
+            }px rgba(120, 220, 255, ${0.6 + hFlickerState.intensity * 0.4})`,
+            transition: "opacity 0.05s ease, box-shadow 0.05s ease",
           }}
         />
       );
 
+      // Vertical line with flicker
       lines.push(
         <div
           key={`v-line-${i}`}
@@ -76,8 +153,11 @@ const HologramEffect = () => {
           style={{
             left: `${(i * 100) / lineCount}%`,
             backgroundColor: "rgba(255, 255, 255, 0.7)",
-            opacity: opacity,
-            boxShadow: "0px 0px 4px rgba(120, 220, 255, 0.8)",
+            opacity: vFlickerState.opacity,
+            boxShadow: `0px 0px ${
+              4 + vFlickerState.intensity * 3
+            }px rgba(120, 220, 255, ${0.6 + vFlickerState.intensity * 0.4})`,
+            transition: "opacity 0.05s ease, box-shadow 0.05s ease",
           }}
         />
       );
@@ -86,16 +166,31 @@ const HologramEffect = () => {
     return lines;
   };
 
-  // Mouse/touch fallback for desktop testing
-  const handleMouseMove: MouseEventHandler<HTMLDivElement> = (e) => {
-    const x = (e.clientX / window.innerWidth) * 180 - 90;
-    const y = (e.clientY / window.innerHeight) * 180 - 90;
+  // Random glitch effect
+  const getGlitchEffect = () => {
+    // Randomly create a glitch effect
+    if (Math.random() < 0.05) {
+      const glitchX = Math.random() < 0.5 ? "-2px" : "2px";
+      return {
+        transform: `translateX(${glitchX})`,
+        opacity: Math.random() * 0.4 + 0.6,
+      };
+    }
+    return {};
+  };
 
-    setOrientation({
-      alpha: x + y,
-      beta: y,
-      gamma: x,
-    });
+  // Mouse/touch fallback for desktop testing
+  const handleMouseMove = (e: { clientX: number; clientY: number }) => {
+    if (!isSupported) {
+      const x = (e.clientX / window.innerWidth) * 180 - 90;
+      const y = (e.clientY / window.innerHeight) * 180 - 90;
+
+      setOrientation({
+        alpha: x + y,
+        beta: y,
+        gamma: x,
+      });
+    }
   };
 
   return (
@@ -110,17 +205,17 @@ const HologramEffect = () => {
         onMouseMove={handleMouseMove}
         onTouchMove={(e) => {
           const touch = e.touches[0];
-          handleMouseMove({
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-          } as MouseEvent<HTMLDivElement>);
+          handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
         }}
       >
-        {/* Hologram grid effect */}
+        {/* Hologram grid effect with flickering */}
         {generateHologramLines()}
 
-        {/* Main content */}
-        <div className="absolute inset-0 flex items-center justify-center">
+        {/* Main content with occasional glitch */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={getGlitchEffect()}
+        >
           <div className="text-white text-xl font-bold tracking-wider opacity-90 select-none transform">
             HOLOGRAM
           </div>
@@ -137,6 +232,16 @@ const HologramEffect = () => {
             )`,
           }}
         />
+
+        {/* Scan line effect */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "repeating-linear-gradient(transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)",
+            opacity: 0.3,
+          }}
+        />
       </div>
 
       {/* Permission container for iOS */}
@@ -144,11 +249,17 @@ const HologramEffect = () => {
 
       {/* Display orientation values */}
       <div className="mt-4 text-center">
-        <div className="text-sm text-gray-700">
-          <p>Alpha: {orientation.alpha.toFixed(1)}°</p>
-          <p>Beta: {orientation.beta.toFixed(1)}°</p>
-          <p>Gamma: {orientation.gamma.toFixed(1)}°</p>
-        </div>
+        {!isSupported ? (
+          <p className="text-red-500">
+            DeviceOrientation not supported. Use mouse/touch instead.
+          </p>
+        ) : (
+          <div className="text-sm text-gray-700">
+            <p>Alpha: {orientation.alpha.toFixed(1)}°</p>
+            <p>Beta: {orientation.beta.toFixed(1)}°</p>
+            <p>Gamma: {orientation.gamma.toFixed(1)}°</p>
+          </div>
+        )}
       </div>
     </div>
   );
