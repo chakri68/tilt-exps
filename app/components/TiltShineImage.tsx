@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, MouseEvent } from "react";
 
 const HologramEffect = () => {
   const [orientation, setOrientation] = useState({
@@ -9,22 +7,9 @@ const HologramEffect = () => {
     gamma: 0,
   });
   const [isSupported, setIsSupported] = useState(true);
-  const [flickerStates, setFlickerStates] = useState<
-    { opacity: number; intensity: number }[]
-  >([]);
-  const [flickerTimestamp, setFlickerTimestamp] = useState(0);
+  const lineCount = 20;
 
   useEffect(() => {
-    // Initialize flicker states for lines
-    const lineCount = 20;
-    const initialFlickerStates = Array(lineCount * 2)
-      .fill(0)
-      .map(() => ({
-        opacity: Math.random() * 0.5 + 0.3,
-        intensity: Math.random(),
-      }));
-    setFlickerStates(initialFlickerStates);
-
     // Check if DeviceOrientationEvent is supported
     if (window.DeviceOrientationEvent) {
       // Request permission for iOS 13+ devices
@@ -59,35 +44,11 @@ const HologramEffect = () => {
       setIsSupported(false);
     }
 
-    // Set up flickering animation
-    const flickerInterval = setInterval(() => {
-      setFlickerTimestamp(Date.now());
-    }, 50); // Update flicker effect every 50ms
-
     // Cleanup
     return () => {
       window.removeEventListener("deviceorientation", handleOrientation);
-      clearInterval(flickerInterval);
     };
   }, []);
-
-  // Update flicker states when timestamp changes
-  useEffect(() => {
-    if (flickerTimestamp === 0) return;
-
-    setFlickerStates((prevStates) =>
-      prevStates.map((state) => {
-        // Randomly decide if this line should change its flicker state
-        if (Math.random() < 0.2) {
-          return {
-            opacity: Math.random() * 0.5 + 0.3,
-            intensity: Math.random(),
-          };
-        }
-        return state;
-      })
-    );
-  }, [flickerTimestamp]);
 
   const handleOrientation = (event: DeviceOrientationEvent) => {
     setOrientation({
@@ -112,23 +73,37 @@ const HologramEffect = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  // Generate hologram grid lines with flickering effect
+  // Determine line visibility based on orientation
+  const shouldShowLine = (index: number, isHorizontal: boolean) => {
+    // Create a deterministic but seemingly random pattern based on orientation
+    const seed = isHorizontal
+      ? (orientation.beta + orientation.gamma + index * 7) % 360
+      : (orientation.alpha + orientation.gamma - index * 13) % 360;
+
+    // Use different orientation angles to affect different lines
+    if (isHorizontal) {
+      // Horizontal lines visibility changes with beta (tilt forward/backward)
+      return Math.abs((seed + orientation.beta) % 17) > 5;
+    } else {
+      // Vertical lines visibility changes with gamma (tilt left/right)
+      return Math.abs((seed + orientation.gamma) % 19) > 6;
+    }
+  };
+
+  // Generate hologram grid lines that appear/disappear based on rotation
   const generateHologramLines = () => {
     const lines = [];
-    const lineCount = 20;
 
     for (let i = 0; i < lineCount; i++) {
-      // Get flicker state for this line
-      const hFlickerState = flickerStates[i] || {
-        opacity: 0.5,
-        intensity: 0.5,
-      };
-      const vFlickerState = flickerStates[i + lineCount] || {
-        opacity: 0.5,
-        intensity: 0.5,
-      };
+      // Determine if this line should be visible based on current orientation
+      const showHLine = shouldShowLine(i, true);
+      const showVLine = shouldShowLine(i, false);
 
-      // Horizontal line with flicker
+      // Base opacity that will be controlled by orientation
+      const hOpacity = showHLine ? 0.7 : 0;
+      const vOpacity = showVLine ? 0.7 : 0;
+
+      // Horizontal line
       lines.push(
         <div
           key={`h-line-${i}`}
@@ -136,16 +111,14 @@ const HologramEffect = () => {
           style={{
             top: `${(i * 100) / lineCount}%`,
             backgroundColor: "rgba(255, 255, 255, 0.7)",
-            opacity: hFlickerState.opacity,
-            boxShadow: `0px 0px ${
-              4 + hFlickerState.intensity * 3
-            }px rgba(120, 220, 255, ${0.6 + hFlickerState.intensity * 0.4})`,
-            transition: "opacity 0.05s ease, box-shadow 0.05s ease",
+            opacity: hOpacity,
+            boxShadow: `0px 0px 4px rgba(120, 220, 255, ${hOpacity})`,
+            transition: "opacity 0.15s ease-out",
           }}
         />
       );
 
-      // Vertical line with flicker
+      // Vertical line
       lines.push(
         <div
           key={`v-line-${i}`}
@@ -153,11 +126,9 @@ const HologramEffect = () => {
           style={{
             left: `${(i * 100) / lineCount}%`,
             backgroundColor: "rgba(255, 255, 255, 0.7)",
-            opacity: vFlickerState.opacity,
-            boxShadow: `0px 0px ${
-              4 + vFlickerState.intensity * 3
-            }px rgba(120, 220, 255, ${0.6 + vFlickerState.intensity * 0.4})`,
-            transition: "opacity 0.05s ease, box-shadow 0.05s ease",
+            opacity: vOpacity,
+            boxShadow: `0px 0px 4px rgba(120, 220, 255, ${vOpacity})`,
+            transition: "opacity 0.15s ease-out",
           }}
         />
       );
@@ -166,21 +137,8 @@ const HologramEffect = () => {
     return lines;
   };
 
-  // Random glitch effect
-  const getGlitchEffect = () => {
-    // Randomly create a glitch effect
-    if (Math.random() < 0.05) {
-      const glitchX = Math.random() < 0.5 ? "-2px" : "2px";
-      return {
-        transform: `translateX(${glitchX})`,
-        opacity: Math.random() * 0.4 + 0.6,
-      };
-    }
-    return {};
-  };
-
   // Mouse/touch fallback for desktop testing
-  const handleMouseMove = (e: { clientX: number; clientY: number }) => {
+  const handleMouseMove = (e: MouseEvent) => {
     if (!isSupported) {
       const x = (e.clientX / window.innerWidth) * 180 - 90;
       const y = (e.clientY / window.innerHeight) * 180 - 90;
@@ -205,19 +163,19 @@ const HologramEffect = () => {
         onMouseMove={handleMouseMove}
         onTouchMove={(e) => {
           const touch = e.touches[0];
-          handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+          handleMouseMove({
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+          } as MouseEvent);
         }}
       >
-        {/* Hologram grid effect with flickering */}
+        {/* Hologram grid effect with rotation-based visibility */}
         {generateHologramLines()}
 
-        {/* Main content with occasional glitch */}
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={getGlitchEffect()}
-        >
+        {/* Main content */}
+        <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-white text-xl font-bold tracking-wider opacity-90 select-none transform">
-            MEGIKK
+            HOLOGRAM
           </div>
         </div>
 
